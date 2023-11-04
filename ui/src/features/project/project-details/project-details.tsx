@@ -1,6 +1,6 @@
 import { createPromiseClient } from '@bufbuild/connect';
 import { faDocker } from '@fortawesome/free-brands-svg-icons';
-import { faDiagramProject } from '@fortawesome/free-solid-svg-icons';
+import { faDiagramProject, faAnchor } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Empty } from 'antd';
@@ -29,6 +29,7 @@ import { RepoNode } from './nodes/repo-node';
 import { StageNode } from './nodes/stage-node';
 import styles from './project-details.module.less';
 import { NodeType, NodesItemType } from './types';
+import {Charts} from "@ui/features/project/project-details/charts";
 
 const lineThickness = 2;
 const nodeWidth = 144;
@@ -388,6 +389,13 @@ export const ProjectDetails = () => {
               </h3>
               <div className='p-4'>
                 <Images projectName={name as string} stages={sortedStages || []} />
+              </div>
+
+              <h3 className='bg-black px-6 pb-3 pt-4 flex items-center'>
+                <FontAwesomeIcon icon={faAnchor} className='mr-2' /> CHARTS
+              </h3>
+              <div className='p-4'>
+                <Charts projectName={name as string} stages={sortedStages || []} />
               </div>
             </div>
           </div>
