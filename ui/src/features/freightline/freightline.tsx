@@ -265,8 +265,8 @@ const FreightContents = (props: {
       ))}
       {(freight?.charts || []).map((i) => (
           <FreightContentItem
-              key={`${i.registryUrl}:${i.version}`}
-              title={`${i.registryUrl}:${i.version}`}
+              key={`${i.name}:${i.version}`}
+              title={`${i.name}:${i.version}`}
               icon={faAnchor}
           >
             <div>{i.version}</div>
