@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Empty } from 'antd';
 import { graphlib, layout } from 'dagre';
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { transport } from '@ui/config/transport';
@@ -17,10 +17,11 @@ import { getStageColors } from '@ui/features/stage/utils';
 import {
   getStage,
   listStages,
+  listWarehouses,
   queryFreight
 } from '@ui/gen/service/v1alpha1/service-KargoService_connectquery';
 import { KargoService } from '@ui/gen/service/v1alpha1/service_connect';
-import { Stage } from '@ui/gen/v1alpha1/types_pb';
+import { Stage, Warehouse } from '@ui/gen/v1alpha1/types_pb';
 import { useDocumentEvent } from '@ui/utils/document';
 
 import { Images } from './images';
@@ -37,14 +38,19 @@ export const ProjectDetails = () => {
   const { name, stageName } = useParams();
   const { data, isLoading } = useQuery(listStages.useQuery({ project: name }));
   const { data: freightData, isLoading: isLoadingFreight } = useQuery(
-    queryFreight.useQuery({ project: name })
+      queryFreight.useQuery({ project: name })
+  );
+
+  const [warehouseMap, setWarehouseMap] = useState<{ [key: string]: Warehouse }>({});
+  const { data: warehouseData, isLoading: isLoadingWarehouses } = useQuery(
+      listWarehouses.useQuery({ project: name })
   );
 
   const client = useQueryClient();
 
   const isVisible = useDocumentEvent(
-    'visibilitychange',
-    () => document.visibilityState === 'visible'
+      'visibilitychange',
+      () => document.visibilityState === 'visible'
   );
 
   React.useEffect(() => {
@@ -90,6 +96,16 @@ export const ProjectDetails = () => {
     return () => cancel.abort();
   }, [isLoading, isVisible, name]);
 
+  React.useEffect(() => {
+    if (!isLoadingWarehouses) {
+      const wm = {} as { [key: string]: Warehouse };
+      (warehouseData?.warehouses || []).forEach((w: Warehouse) => {
+        wm[w?.metadata?.name || ''] = w;
+      });
+      setWarehouseMap(wm);
+    }
+  }, [warehouseData, isLoadingWarehouses]);
+
   const [nodes, connectors, box, sortedStages] = React.useMemo(() => {
     if (!data) {
       return [[], []];
@@ -100,27 +116,28 @@ export const ProjectDetails = () => {
     g.setDefaultEdgeLabel(() => ({}));
 
     const myNodes = data.stages
-      .slice()
-      .sort((a, b) => a.metadata?.name?.localeCompare(b.metadata?.name || '') || 0)
-      .flatMap((stage) => {
-        const n = [
-          {
-            data: stage,
-            type: NodeType.STAGE,
-            color: '#000'
+        .slice()
+        .sort((a, b) => a.metadata?.name?.localeCompare(b.metadata?.name || '') || 0)
+        .flatMap((stage) => {
+          const n = [
+            {
+              data: stage,
+              type: NodeType.STAGE,
+              color: '#000'
+            }
+          ] as NodesItemType[];
+
+          const warehouseName = stage.spec?.subscriptions?.warehouse;
+          if (warehouseName) {
+            n.push({
+              data: warehouseMap[warehouseName],
+              stageName: stage.metadata?.name || '',
+              type: NodeType.WAREHOUSE
+            });
           }
-        ] as NodesItemType[];
 
-        if (stage.spec?.subscriptions?.warehouse) {
-          n.push({
-            data: stage.spec?.subscriptions?.warehouse || '',
-            stageName: stage.metadata?.name || '',
-            type: NodeType.WAREHOUSE
-          });
-        }
-
-        return n;
-      });
+          return n;
+        });
 
     myNodes.forEach((item, index) => {
       g.setNode(String(index), {
@@ -201,20 +218,20 @@ export const ProjectDetails = () => {
     });
 
     const box = nodes.reduce(
-      (acc, node) => ({
-        width: Math.max(acc.width, node.left + node.width),
-        height: Math.max(acc.height, node.top + node.height)
-      }),
-      {
-        width: 0,
-        height: 0
-      }
+        (acc, node) => ({
+          width: Math.max(acc.width, node.left + node.width),
+          height: Math.max(acc.height, node.top + node.height)
+        }),
+        {
+          width: 0,
+          height: 0
+        }
     );
 
     const sortedStages = nodes
-      .filter((item) => item.type === NodeType.STAGE)
-      .sort((a, b) => a.left - b.left)
-      .map((item) => item.data) as Stage[];
+        .filter((item) => item.type === NodeType.STAGE)
+        .sort((a, b) => a.left - b.left)
+        .map((item) => item.data) as Stage[];
 
     const stageColorMap = getStageColors(name || '', sortedStages);
     nodes.forEach((node) => {
@@ -234,7 +251,7 @@ export const ProjectDetails = () => {
   const [promotionType, setPromotionType] = React.useState('default' as PromotionType);
   const [confirmingPromotion, setConfirmingPromotion] = React.useState<string | undefined>();
   const [subscribersByStage, setSubscribersByStage] = React.useState<{ [key: string]: Stage[] }>(
-    {}
+      {}
   );
 
   React.useEffect(() => {
@@ -265,117 +282,117 @@ export const ProjectDetails = () => {
     }
     if (promotionType === 'subscribers') {
       return !subscribersByStage[promotingStage?.metadata?.name || '']?.find(
-        (item) => item.metadata?.name === stage?.metadata?.name
+          (item) => item.metadata?.name === stage?.metadata?.name
       );
     }
     return false;
   };
 
   return (
-    <div className='flex flex-col flex-grow'>
-      <ColorContext.Provider value={getStageColors(name || '', sortedStages || [])}>
-        <Freightline
-          freight={freightData?.groups['']?.freight || []}
-          stagesPerFreight={stagesPerFreight}
-          promotingStage={promotingStage}
-          setPromotingStage={setPromotingStage}
-          promotionType={promotionType}
-          confirmingPromotion={confirmingPromotion}
-          setConfirmingPromotion={setConfirmingPromotion}
-          project={name || ''}
-        />
-        <div className='flex flex-grow w-full'>
-          <div className={`overflow-hidden flex-grow w-full ${styles.dag}`}>
-            <div className='text-sm mb-4 font-semibold p-6'>
-              <FontAwesomeIcon icon={faDiagramProject} className='mr-2' />
-              PIPELINE
-            </div>
-            <div className='overflow-auto p-6'>
-              <div
-                className='relative'
-                style={{ width: box?.width, height: box?.height, margin: '0 auto' }}
-              >
-                {nodes?.map((node, index) => (
-                  <div
-                    key={index}
-                    className='absolute'
-                    style={{
-                      left: node.left,
-                      top: node.top,
-                      width: node.width,
-                      height: node.height
-                    }}
-                  >
-                    {node.type === NodeType.STAGE ? (
-                      <>
-                        <StageNode
-                          stage={node.data}
-                          color={node.color}
-                          height={node.height}
-                          projectName={name}
-                          faded={isFaded(node.data)}
-                          hasNoSubscribers={
-                            (subscribersByStage[node?.data?.metadata?.name || ''] || []).length ===
-                            0
-                          }
-                          onPromoteClick={(type: PromotionType) => {
-                            if (promotingStage?.metadata?.name === node.data?.metadata?.name) {
-                              setPromotingStage(undefined);
-                            } else {
-                              setPromotingStage(node.data);
-                              setPromotionType(type);
-                            }
-                            setConfirmingPromotion(undefined);
+      <div className='flex flex-col flex-grow'>
+        <ColorContext.Provider value={getStageColors(name || '', sortedStages || [])}>
+          <Freightline
+              freight={freightData?.groups['']?.freight || []}
+              stagesPerFreight={stagesPerFreight}
+              promotingStage={promotingStage}
+              setPromotingStage={setPromotingStage}
+              promotionType={promotionType}
+              confirmingPromotion={confirmingPromotion}
+              setConfirmingPromotion={setConfirmingPromotion}
+              project={name || ''}
+          />
+          <div className='flex flex-grow w-full'>
+            <div className={`overflow-hidden flex-grow w-full ${styles.dag}`}>
+              <div className='text-sm mb-4 font-semibold p-6'>
+                <FontAwesomeIcon icon={faDiagramProject} className='mr-2' />
+                PIPELINE
+              </div>
+              <div className='overflow-auto p-6'>
+                <div
+                    className='relative'
+                    style={{ width: box?.width, height: box?.height, margin: '0 auto' }}
+                >
+                  {nodes?.map((node, index) => (
+                      <div
+                          key={index}
+                          className='absolute'
+                          style={{
+                            left: node.left,
+                            top: node.top,
+                            width: node.width,
+                            height: node.height
                           }}
-                          promoting={
-                            promotingStage?.metadata?.name === node.data?.metadata?.name
-                              ? promotionType
-                              : undefined
-                          }
-                        />
-                      </>
-                    ) : (
-                      <RepoNode nodeData={node} height={node.height} />
-                    )}
-                  </div>
-                ))}
-                {connectors?.map((connector) =>
-                  connector.map((line, i) => (
-                    <div
-                      className='absolute bg-gray-400'
-                      style={{
-                        padding: 0,
-                        margin: 0,
-                        height: lineThickness,
-                        width: line.width,
-                        left: line.x,
-                        top: line.y,
-                        transform: `rotate(${line.angle}deg)`
-                      }}
-                      key={i}
-                    />
-                  ))
-                )}
+                      >
+                        {node.type === NodeType.STAGE ? (
+                            <>
+                              <StageNode
+                                  stage={node.data}
+                                  color={node.color}
+                                  height={node.height}
+                                  projectName={name}
+                                  faded={isFaded(node.data)}
+                                  hasNoSubscribers={
+                                      (subscribersByStage[node?.data?.metadata?.name || ''] || []).length ===
+                                      0
+                                  }
+                                  onPromoteClick={(type: PromotionType) => {
+                                    if (promotingStage?.metadata?.name === node.data?.metadata?.name) {
+                                      setPromotingStage(undefined);
+                                    } else {
+                                      setPromotingStage(node.data);
+                                      setPromotionType(type);
+                                    }
+                                    setConfirmingPromotion(undefined);
+                                  }}
+                                  promoting={
+                                    promotingStage?.metadata?.name === node.data?.metadata?.name
+                                        ? promotionType
+                                        : undefined
+                                  }
+                              />
+                            </>
+                        ) : (
+                            <RepoNode nodeData={node} height={node.height} />
+                        )}
+                      </div>
+                  ))}
+                  {connectors?.map((connector) =>
+                      connector.map((line, i) => (
+                          <div
+                              className='absolute bg-gray-400'
+                              style={{
+                                padding: 0,
+                                margin: 0,
+                                height: lineThickness,
+                                width: line.width,
+                                left: line.x,
+                                top: line.y,
+                                transform: `rotate(${line.angle}deg)`
+                              }}
+                              key={i}
+                          />
+                      ))
+                  )}
+                </div>
+              </div>
+            </div>
+            <div
+                className='text-gray-300 text-sm'
+                style={{
+                  width: '400px',
+                  backgroundColor: '#222'
+                }}
+            >
+              <h3 className='bg-black px-6 pb-3 pt-4 flex items-center'>
+                <FontAwesomeIcon icon={faDocker} className='mr-2' /> IMAGES
+              </h3>
+              <div className='p-4'>
+                <Images projectName={name as string} stages={sortedStages || []} />
               </div>
             </div>
           </div>
-          <div
-            className='text-gray-300 text-sm'
-            style={{
-              width: '400px',
-              backgroundColor: '#222'
-            }}
-          >
-            <h3 className='bg-black px-6 pb-3 pt-4 flex items-center'>
-              <FontAwesomeIcon icon={faDocker} className='mr-2' /> IMAGES
-            </h3>
-            <div className='p-4'>
-              <Images projectName={name as string} stages={sortedStages || []} />
-            </div>
-          </div>
-        </div>
-        {stage && <StageDetails stage={stage} />}
-      </ColorContext.Provider>
-    </div>
+          {stage && <StageDetails stage={stage} />}
+        </ColorContext.Provider>
+      </div>
   );
 };
