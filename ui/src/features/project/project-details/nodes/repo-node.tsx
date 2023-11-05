@@ -9,7 +9,7 @@ import { NodeType, NodesRepoType } from '../types';
 
 import * as styles from './repo-node.module.less';
 
-const MAX_CHARS = 19;
+const MAX_CHARS = 16;
 
 type Props = {
     nodeData: NodesRepoType;
@@ -50,8 +50,9 @@ export const RepoNode = ({ nodeData, height }: Props) => (
                             <div key={`${nodeData.data.metadata?.name}-${i}`}>
                                 {sub.chart && (
                                     <RepoNodeBody
-                                        label='Registry URL'
-                                        value={sub.chart.registryUrl}
+                                        label='Helm Chart'
+                                        value={sub.chart.name!}
+                                        linkUrl={sub.chart.registryUrl + sub.chart.name!}
                                         type={NodeType.REPO_CHART}
                                     />
                                 )}
@@ -59,6 +60,7 @@ export const RepoNode = ({ nodeData, height }: Props) => (
                                     <RepoNodeBody
                                         label='Repo URL'
                                         value={sub.image.repoUrl}
+                                        linkUrl={sub.image.repoUrl}
                                         type={NodeType.REPO_IMAGE}
                                     />
                                 )}
@@ -77,10 +79,12 @@ export const RepoNode = ({ nodeData, height }: Props) => (
 const RepoNodeBody = ({
                           label,
                           value,
+                          linkUrl,
                           type
                       }: {
     label: string;
     value: string;
+    linkUrl: string;
     type?: NodeType;
 }) => (
     <div className='mb-2'>
@@ -89,7 +93,7 @@ const RepoNodeBody = ({
             {label}
         </div>
         <Tooltip title={value}>
-            <a href={urlWithProtocol(value)} className={styles.value} target='_blank' rel='noreferrer'>
+            <a href={urlWithProtocol(linkUrl)} className={styles.value} target='_blank' rel='noreferrer'>
                 {value.length > MAX_CHARS && '...'}
                 {value.substring(value.length - MAX_CHARS)}
             </a>
